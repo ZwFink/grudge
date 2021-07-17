@@ -34,7 +34,8 @@ from mpi4py import rc
 rc.initialize = False
 from charm4py import *
 
-from arraycontext import PyOpenCLArrayContext, thaw
+from arraycontext import thaw
+from grudge.array_context import PyOpenCLArrayContext
 
 from grudge.shortcuts import set_up_rk4
 from grudge import DiscretizationCollection

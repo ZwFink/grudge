@@ -31,7 +31,8 @@ import numpy as np
 import pyopencl as cl
 import pyopencl.tools as cl_tools
 
-from arraycontext import PyOpenCLArrayContext, thaw
+from arraycontext import thaw
+from grudge.array_context import PyOpenCLArrayContext
 
 from meshmode.dof_array import flatten
 from meshmode.discretization.connection import FACE_RESTR_INTERIOR
@@ -106,7 +107,8 @@ def main(ctx_factory, dim=2, order=4, use_quad=False, visualize=False):
     queue = cl.CommandQueue(cl_ctx)
     actx = PyOpenCLArrayContext(
         queue,
-        allocator=cl_tools.MemoryPool(cl_tools.ImmediateAllocator(queue))
+        allocator=cl_tools.MemoryPool(cl_tools.ImmediateAllocator(queue)),
+        force_device_scalars=True,
     )
 
     # {{{ parameters
@@ -214,7 +216,7 @@ def main(ctx_factory, dim=2, order=4, use_quad=False, visualize=False):
     dt_stepper = set_up_rk4("u", dt, u0, rhs)
     plot = Plotter(actx, dcoll, order, visualize=visualize)
 
-    norm_u = op.norm(dcoll, u0, 2)
+    norm_u = actx.to_numpy(op.norm(dcoll, u0, 2))
 
     step = 0
 
@@ -249,7 +251,7 @@ def main(ctx_factory, dim=2, order=4, use_quad=False, visualize=False):
 
         step += 1
         if step % 10 == 0:
-            norm_u = op.norm(dcoll, event.state_component, 2)
+            norm_u = actx.to_numpy(op.norm(dcoll, event.state_component, 2))
             plot(event, "fld-surface-%04d" % step)
 
         logger.info("[%04d] t = %.5f |u| = %.5e", step, event.t, norm_u)
