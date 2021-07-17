@@ -82,7 +82,7 @@ class DiscretizationCollection:
                  order=None,
                  discr_tag_to_group_factory=None, mpi_communicator=None,
                  # FIXME: `quad_tag_to_group_factory` is deprecated
-                 quad_tag_to_group_factory=None):
+                 quad_tag_to_group_factory=None, local_chare = None, charm_proxy = None):
         """
         :arg discr_tag_to_group_factory: A mapping from discretization tags
             (typically one of: :class:`grudge.dof_desc.DISCR_TAG_BASE`,
@@ -168,6 +168,8 @@ class DiscretizationCollection:
                         mpi_communicator, array_context)
 
         self.mpi_communicator = mpi_communicator
+        self.charm_proxy = charm_proxy
+        self.local_chare = local_chare
 
     @property
     def quad_tag_to_group_factory(self):

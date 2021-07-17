@@ -50,6 +50,7 @@ from arraycontext import (
     with_container_arithmetic,
     dataclass_array_container
 )
+from charm4py import *
 
 from dataclasses import dataclass
 
@@ -65,6 +66,7 @@ from meshmode.mesh import BTAG_PARTITION
 
 import numpy as np
 import grudge.dof_desc as dof_desc
+from charm4py import *
 
 
 # {{{ Trace pair container class
@@ -291,13 +293,16 @@ class _RankBoundaryCommunication:
 
         local_data = self.array_context.to_numpy(flatten(self.local_dof_array))
         comm = self.dcoll.mpi_communicator
+        proxy = self.dcoll.charm_proxy
+        self.partner_channel = Channel(self.dcoll.local_chare, proxy[remote_rank])
 
-        self.send_req = comm.Isend(local_data, remote_rank, tag=self.tag)
+        self.partner_channel.send(local_data)
+        # self.send_req = comm.Isend(local_data, remote_rank, tag=self.tag)
         self.remote_data_host = np.empty_like(local_data)
-        self.recv_req = comm.Irecv(self.remote_data_host, remote_rank, self.tag)
+        # self.recv_req = comm.Irecv(self.remote_data_host, remote_rank, self.tag)
 
     def finish(self):
-        self.recv_req.Wait()
+        self.remote_data_host = self.partner_channel.recv()
 
         actx = self.array_context
         remote_dof_array = unflatten(
@@ -310,7 +315,7 @@ class _RankBoundaryCommunication:
         )
         swapped_remote_dof_array = bdry_conn(remote_dof_array)
 
-        self.send_req.Wait()
+        # self.send_req.Wait()
 
         return TracePair(self.remote_btag,
                          interior=self.local_dof_array,
