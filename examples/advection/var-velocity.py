@@ -31,7 +31,8 @@ import numpy as np
 import pyopencl as cl
 import pyopencl.tools as cl_tools
 
-from arraycontext import PyOpenCLArrayContext, thaw
+from arraycontext import thaw
+from grudge.array_context import PyOpenCLArrayContext
 
 from meshmode.dof_array import flatten
 from meshmode.mesh import BTAG_ALL
@@ -103,7 +104,8 @@ def main(ctx_factory, dim=2, order=4, use_quad=False, visualize=False):
     queue = cl.CommandQueue(cl_ctx)
     actx = PyOpenCLArrayContext(
         queue,
-        allocator=cl_tools.MemoryPool(cl_tools.ImmediateAllocator(queue))
+        allocator=cl_tools.MemoryPool(cl_tools.ImmediateAllocator(queue)),
+        force_device_scalars=True,
     )
 
     # {{{ parameters
@@ -214,7 +216,7 @@ def main(ctx_factory, dim=2, order=4, use_quad=False, visualize=False):
             continue
 
         if step % 10 == 0:
-            norm_u = op.norm(dcoll, event.state_component, 2)
+            norm_u = actx.to_numpy(op.norm(dcoll, event.state_component, 2))
             plot(event, "fld-var-velocity-%04d" % step)
 
         step += 1
