@@ -321,6 +321,111 @@ class _RankBoundaryCommunication:
                          interior=self.local_dof_array,
                          exterior=swapped_remote_dof_array)
 
+class _CharmRankBoundaryCommunication(_RankBoundaryCommunication):
+    def __init__(self, dcoll: DiscretizationCollection,
+                 remote_rank, vol_field, tag=None
+                 ):
+        self.tag = self.base_tag
+        if tag is not None:
+            self.tag += tag
+
+        self.dcoll = dcoll
+        self.array_context = vol_field.array_context
+        self.remote_btag = BTAG_PARTITION(remote_rank)
+        self.bdry_discr = dcoll.discr_from_dd(self.remote_btag)
+
+        from grudge.op import project
+
+        self.local_dof_array = project(dcoll, "vol", self.remote_btag, vol_field)
+
+        local_data = self.array_context.to_numpy(flatten(self.local_dof_array))
+        comm = self.dcoll.mpi_communicator
+        proxy = self.dcoll.charm_proxy
+        self.partner_channel = Channel(self.dcoll.local_chare, proxy[remote_rank])
+        self.partner_channel.comm = self
+
+        self.partner_channel.send(local_data)
+        # self.send_req = comm.Isend(local_data, remote_rank, tag=self.tag)
+        self.remote_data_host = np.empty_like(local_data)
+        # self.recv_req = comm.Irecv(self.remote_data_host, remote_rank, self.tag)
+
+    def finish(self):
+        self.remote_data_host = self.partner_channel.recv()
+
+        actx = self.array_context
+        remote_dof_array = unflatten(
+            self.array_context, self.bdry_discr,
+            actx.from_numpy(self.remote_data_host)
+        )
+
+        bdry_conn = self.dcoll.distributed_boundary_swap_connection(
+            dof_desc.as_dofdesc(dof_desc.DTAG_BOUNDARY(self.remote_btag))
+        )
+        swapped_remote_dof_array = bdry_conn(remote_dof_array)
+
+        # self.send_req.Wait()
+
+        return TracePair(self.remote_btag,
+                         interior=self.local_dof_array,
+                         exterior=swapped_remote_dof_array)
+
+    def get_recv_request(self):
+        return self.partner_channel
+
+
+class _MPIRankBoundaryCommunication(_RankBoundaryCommunication):
+    def __init__(self, dcoll: DiscretizationCollection,
+                 remote_rank, vol_field, tag=None
+                 ):
+        self.tag = self.base_tag
+        if tag is not None:
+            self.tag += tag
+
+        self.dcoll = dcoll
+        self.array_context = vol_field.array_context
+        self.remote_btag = BTAG_PARTITION(remote_rank)
+        self.bdry_discr = dcoll.discr_from_dd(self.remote_btag)
+
+        from grudge.op import project
+
+        self.local_dof_array = project(dcoll, "vol", self.remote_btag, vol_field)
+
+        local_data = self.array_context.to_numpy(flatten(self.local_dof_array))
+        # This should become an abstract communicator
+        comm = self.dcoll.mpi_communicator
+        proxy = self.dcoll.charm_proxy
+
+        self.send_req = comm.Isend(local_data, remote_rank, tag=self.tag)
+        self.remote_data_host = np.empty_like(local_data)
+        self.recv_req = comm.Irecv(self.remote_data_host, remote_rank, self.tag)
+
+    def finish(self):
+        self.remote_data_host = self.partner_channel.recv()
+
+        actx = self.array_context
+        remote_dof_array = unflatten(
+            self.array_context, self.bdry_discr,
+            actx.from_numpy(self.remote_data_host)
+        )
+
+        bdry_conn = self.dcoll.distributed_boundary_swap_connection(
+            dof_desc.as_dofdesc(dof_desc.DTAG_BOUNDARY(self.remote_btag))
+        )
+        swapped_remote_dof_array = bdry_conn(remote_dof_array)
+
+        # self.send_req.Wait()
+
+        return TracePair(self.remote_btag,
+                         interior=self.local_dof_array,
+                         exterior=swapped_remote_dof_array)
+
+
+def waitmap_charm4py(receive_requests, rbcomms):
+    output = []
+    for ch in charm.iwait(receive_requests):
+        comm = ch.comm
+        output.append(comm.finish())
+    return output
 
 def _cross_rank_trace_pairs_scalar_field(
         dcoll: DiscretizationCollection, vec, tag=None) -> list:
@@ -328,9 +433,10 @@ def _cross_rank_trace_pairs_scalar_field(
         return [TracePair(BTAG_PARTITION(remote_rank), interior=vec, exterior=vec)
                 for remote_rank in connected_ranks(dcoll)]
     else:
-        rbcomms = [_RankBoundaryCommunication(dcoll, remote_rank, vec, tag=tag)
+        rbcomms = [_CharmRankBoundaryCommunication(dcoll, remote_rank, vec, tag=tag)
                    for remote_rank in connected_ranks(dcoll)]
-        return [rbcomm.finish() for rbcomm in rbcomms]
+        recv_reqs = [rbcomm.get_recv_request() for rbcomm in rbcomms]
+        return waitmap_charm4py(recv_reqs, rbcomms)
 
 
 def cross_rank_trace_pairs(
