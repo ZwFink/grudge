@@ -138,7 +138,7 @@ def nodal_sum(dcoll: DiscretizationCollection, dd, vec) -> Scalar:
     actx = get_container_context_recursively(vec)
 
     return actx.from_numpy(
-        comm.allreduce(actx.to_numpy(nodal_sum_loc(dcoll, dd, vec)), op=MPI.SUM))
+        comm.owlreduce(actx.to_numpy(nodal_sum_loc(dcoll, dd, vec)), op=MPI.SUM))
 
 
 def nodal_sum_loc(dcoll: DiscretizationCollection, dd, vec) -> Scalar:
@@ -182,7 +182,7 @@ def nodal_min(dcoll: DiscretizationCollection, dd, vec, *, initial=None) -> Scal
     actx = vec.array_context
 
     return actx.from_numpy(
-        comm.allreduce(
+        comm.owlreduce(
             actx.to_numpy(nodal_min_loc(dcoll, dd, vec, initial=initial)),
             op=MPI.MIN))
 
@@ -239,7 +239,7 @@ def nodal_max(dcoll: DiscretizationCollection, dd, vec, *, initial=None) -> Scal
     actx = vec.array_context
 
     return actx.from_numpy(
-        comm.allreduce(
+        comm.owlreduce(
             actx.to_numpy(nodal_max_loc(dcoll, dd, vec, initial=initial)),
             op=MPI.MAX))
 

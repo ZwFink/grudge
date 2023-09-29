@@ -618,11 +618,13 @@ class _RankBoundaryCommunicationEager:
         rec_keyed_map_array_container(recv_single_array, remote_bdry_data_template)
 
     def finish(self):
-        from mpi4py import MPI
+        # from mpi4py import MPI
 
         # Wait for the nonblocking receive requests to complete before
         # accessing the data
-        MPI.Request.waitall(self.recv_reqs)
+        # MPI.Request.waitall(self.recv_reqs)
+        import commi
+        commi.request.Waitall(self.recv_reqs)
 
         def finish_single_array(key, remote_subary_template):
             if isinstance(remote_subary_template, Number):
@@ -652,7 +654,8 @@ class _RankBoundaryCommunicationEager:
             leaf_class=DOFArray)
 
         # Complete the nonblocking send requests
-        MPI.Request.waitall(self.send_reqs)
+        # MPI.Request.waitall(self.send_reqs)
+        commi.request.Waitall(self.send_reqs)
 
         return TracePair(
                 self.local_bdry_dd,
